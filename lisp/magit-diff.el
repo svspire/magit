@@ -2155,7 +2155,7 @@ section or a child thereof."
       (when orig (setq orig (magit-decode-git-path orig)))
       (when file (setq file (magit-decode-git-path file)))
       (magit-diff-insert-file-section
-       (or file base) orig status modes nil long-status)))
+       (or file base) orig status modes nil nil long-status)))
    ((looking-at "^diff --\
 \\(?:\\(?1:git\\) \\(?:\\(?2:.+?\\) \\(?3:.+?\\)\\)?\
 \\|\\(?:cc\\|combined\\) \\(?4:.+\\)\\)\n")
@@ -2165,7 +2165,7 @@ section or a child thereof."
           (orig (match-string 2))
           (file (or (match-string 3) (match-string 4)))
           (header (list (match-string 0)))
-          modes)
+          modes rename)
       ;; `git-diff' ignores `--no-prefix' for new files and renames at least.
       (when (and file orig
                  (string-prefix-p "a/" orig)
@@ -2182,6 +2182,7 @@ section or a child thereof."
          ((looking-at "new file .+\n")
           (setq status "new file"))
          ((looking-at "rename from \\(.+\\)\nrename to \\(.+\\)\n")
+          (setq rename (match-string 0))
           (setq orig (match-string 1))
           (setq file (match-string 2))
           (setq status "renamed"))
@@ -2201,8 +2202,9 @@ section or a child thereof."
          (t
           (error "BUG: Unknown extended header: %S"
                  (buffer-substring (point) (line-end-position)))))
-        ;; This header is treated as some sort of special hunk.
-        (unless (string-prefix-p "old mode" (match-string 0))
+        ;; These headers are treated as some sort of special hunk.
+        (unless (or (string-prefix-p "old mode" (match-string 0))
+                    (string-prefix-p "rename"   (match-string 0)))
           (push (match-string 0) header))
         (magit-delete-match))
       (setq header (mapconcat #'identity (nreverse header) ""))
@@ -2215,10 +2217,10 @@ section or a child thereof."
         (setq file (substring file 2))
         (when orig
           (setq orig (substring orig 2))))
-      (magit-diff-insert-file-section file orig status modes header)))))
+      (magit-diff-insert-file-section file orig status modes rename header)))))
 
 (defun magit-diff-insert-file-section
-    (file orig status modes header &optional long-status)
+    (file orig status modes rename header &optional long-status)
   (magit-insert-section section
     (file file (or (equal status "deleted")
                    (derived-mode-p 'magit-status-mode)))
@@ -2236,6 +2238,10 @@ section or a child thereof."
     (when modes
       (magit-insert-section (hunk)
         (insert modes)
+        (magit-insert-heading)))
+    (when rename
+      (magit-insert-section (hunk)
+        (insert rename)
         (magit-insert-heading)))
     (magit-wash-sequence #'magit-diff-wash-hunk)))
 
